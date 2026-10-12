@@ -72,8 +72,9 @@ export const StudentUploadArea: React.FC<StudentUploadAreaProps> = ({
   // File upload states
   const [fileList, setFileList] = useState<SubmissionFile[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState<
-    Array<{ name: string; size: number; progress: number; error?: string }>
+    Array<{ name: string; size: number; progress: number; error?: string; fileRef?: File }>
   >([]);
+  const [previewFile, setPreviewFile] = useState<SubmissionFile | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -171,8 +172,8 @@ export const StudentUploadArea: React.FC<StudentUploadAreaProps> = ({
 
       // Add to uploading queue
       setUploadingFiles((prev) => [
-        ...prev,
-        { name: file.name, size: file.size, progress: 10 },
+        ...prev.filter((item) => item.name !== file.name),
+        { name: file.name, size: file.size, progress: 15, fileRef: file },
       ]);
 
       try {
@@ -196,7 +197,10 @@ export const StudentUploadArea: React.FC<StudentUploadAreaProps> = ({
 
         // Remove from uploading queue and add to fileList
         setUploadingFiles((prev) => prev.filter((item) => item.name !== file.name));
-        setFileList((prev) => [...prev, uploadedFile]);
+        setFileList((prev) => {
+          const filtered = prev.filter((item) => item.fileName !== file.name);
+          return [...filtered, uploadedFile];
+        });
 
         logAction(
           'UPLOAD_SUBMISSION_FILE',
@@ -207,13 +211,19 @@ export const StudentUploadArea: React.FC<StudentUploadAreaProps> = ({
         setUploadingFiles((prev) =>
           prev.map((item) =>
             item.name === file.name
-              ? { ...item, error: err.message || 'Lỗi tải tệp' }
+              ? { ...item, error: err.message || 'Lỗi tải tệp', fileRef: file }
               : item
           )
         );
-        setErrorMessage(err.message || 'Có lỗi xảy ra khi tải tệp lên hệ thống.');
+        setErrorMessage(`Lỗi tải "${file.name}": ${err.message || 'Không thể lưu tệp.'}`);
       }
     }
+  };
+
+  // Retry upload for a failed file
+  const handleRetryUpload = (fileToRetry: File) => {
+    setUploadingFiles((prev) => prev.filter((item) => item.name !== fileToRetry.name));
+    handleFilesChosen([fileToRetry]);
   };
 
   // Remove file
@@ -339,14 +349,28 @@ export const StudentUploadArea: React.FC<StudentUploadAreaProps> = ({
   };
 
   // Trigger AI 4C diagnosis with uploaded files
-  const handleTriggerAI4C = () => {
-    // If there is an HTML file in uploaded files, extract or read it
+  const handleTriggerAI4C = async () => {
+    // Tìm tệp HTML trong danh sách tệp đã tải lên (ví dụ bangCLB.html, CLB.html, thohay.html)
     const htmlFile = fileList.find(
       (f) => f.fileType === 'html' || f.fileName.endsWith('.html') || f.fileName.endsWith('.htm')
     );
 
+    let htmlCodeToAnalyze: string | undefined = htmlFile?.contentSnapshot;
+
+    // Nếu chưa có snapshot nhưng có storageUrl, thử nạp trực tiếp
+    if (!htmlCodeToAnalyze && htmlFile?.storageUrl) {
+      try {
+        const res = await fetch(htmlFile.storageUrl);
+        if (res.ok) {
+          htmlCodeToAnalyze = await res.text();
+        }
+      } catch (fetchErr) {
+        console.warn('Không thể nạp nội dung tệp HTML qua URL:', fetchErr);
+      }
+    }
+
     if (onAnalyzeWith4C) {
-      onAnalyzeWith4C(htmlFile ? undefined : undefined);
+      onAnalyzeWith4C(htmlCodeToAnalyze);
     } else {
       setActiveView('reviewer_4c');
     }
@@ -549,20 +573,50 @@ export const StudentUploadArea: React.FC<StudentUploadAreaProps> = ({
         {/* Uploading Progress Items */}
         {uploadingFiles.length > 0 && (
           <div className="space-y-2">
-            <h4 className="text-xs font-bold text-slate-700">Đang tải tệp lên hệ thống...</h4>
+            <h4 className="text-xs font-bold text-slate-700">Tiến trình tải tệp lên:</h4>
             {uploadingFiles.map((up, i) => (
-              <div key={i} className="p-3 bg-blue-50/80 rounded-xl border border-blue-200 text-xs space-y-1.5">
-                <div className="flex items-center justify-between font-medium text-slate-800">
-                  <span className="truncate max-w-[70%]">{up.name}</span>
-                  <span className="text-blue-600 font-bold">{up.progress}%</span>
+              <div
+                key={i}
+                className={`p-3 rounded-xl border text-xs space-y-1.5 ${
+                  up.error
+                    ? 'bg-rose-50 border-rose-200 text-rose-800'
+                    : 'bg-blue-50/80 border-blue-200 text-slate-800'
+                }`}
+              >
+                <div className="flex items-center justify-between font-medium">
+                  <span className="truncate max-w-[65%] font-bold">{up.name}</span>
+                  {up.error ? (
+                    <span className="text-rose-600 font-extrabold flex items-center gap-1">
+                      <AlertTriangle className="w-3.5 h-3.5" /> Lỗi tải
+                    </span>
+                  ) : (
+                    <span className="text-blue-600 font-bold">{up.progress}%</span>
+                  )}
                 </div>
-                <div className="w-full bg-blue-200 h-2 rounded-full overflow-hidden">
+
+                <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
                   <div
-                    className="bg-[#2563EB] h-full transition-all duration-200"
-                    style={{ width: `${up.progress}%` }}
+                    className={`h-full transition-all duration-300 ${
+                      up.error ? 'bg-rose-500' : 'bg-[#2563EB]'
+                    }`}
+                    style={{ width: `${up.error ? 100 : up.progress}%` }}
                   ></div>
                 </div>
-                {up.error && <p className="text-[11px] text-rose-600 font-bold">{up.error}</p>}
+
+                {up.error && (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+                    <p className="text-[11px] text-rose-700 font-medium leading-relaxed">{up.error}</p>
+                    {up.fileRef && (
+                      <button
+                        type="button"
+                        onClick={() => handleRetryUpload(up.fileRef!)}
+                        className="self-start sm:self-auto px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] cursor-pointer shrink-0 transition-colors shadow-xs"
+                      >
+                        Thử lại tải tệp
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -575,9 +629,8 @@ export const StudentUploadArea: React.FC<StudentUploadAreaProps> = ({
               <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
                 Danh sách tệp đính kèm ({fileList.length} tệp)
               </h3>
-              <span className="text-[11px] text-slate-500">
-                Tổng:{' '}
-                {formatFileSize(fileList.reduce((acc, curr) => acc + curr.fileSize, 0))}
+              <span className="text-[11px] text-slate-500 font-medium">
+                Tổng: {formatFileSize(fileList.reduce((acc, curr) => acc + curr.fileSize, 0))}
               </span>
             </div>
 
@@ -591,17 +644,40 @@ export const StudentUploadArea: React.FC<StudentUploadAreaProps> = ({
                     <div className="p-2 rounded-lg bg-slate-100 shrink-0">
                       {getFileIcon(file.fileType)}
                     </div>
-                    <div className="overflow-hidden">
+                    <div className="overflow-hidden space-y-0.5">
                       <div className="text-xs font-bold text-slate-800 truncate" title={file.fileName}>
                         {file.fileName}
                       </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">
-                        {formatFileSize(file.fileSize)} • {file.uploadedAt || 'Vừa tải lên'}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] text-slate-400">
+                          {formatFileSize(file.fileSize)} • {file.uploadedAt || 'Vừa tải lên'}
+                        </span>
+                        {file.isSupabase ? (
+                          <span className="text-[9px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.2 rounded border border-emerald-200">
+                            Supabase Cloud
+                          </span>
+                        ) : (
+                          <span className="text-[9px] bg-blue-50 text-blue-700 font-bold px-1.5 py-0.2 rounded border border-blue-200">
+                            Lưu trữ bảo đảm
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1 shrink-0">
+                    {/* Xem trước nếu có nội dung HTML hoặc URL */}
+                    {(file.contentSnapshot || file.fileType === 'html' || ['jpg', 'png', 'webp'].includes(file.fileType)) && (
+                      <button
+                        type="button"
+                        onClick={() => setPreviewFile(file)}
+                        className="p-1.5 rounded-lg text-slate-600 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                        title="Xem trước nội dung"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    )}
+
                     {file.storageUrl && (
                       <a
                         href={file.storageUrl}
@@ -614,6 +690,7 @@ export const StudentUploadArea: React.FC<StudentUploadAreaProps> = ({
                         <Download className="w-4 h-4" />
                       </a>
                     )}
+
                     <button
                       type="button"
                       onClick={() => handleRemoveFile(file.id)}
@@ -951,6 +1028,125 @@ export const StudentUploadArea: React.FC<StudentUploadAreaProps> = ({
                   className="px-5 py-2 text-xs font-bold bg-[#2563EB] hover:bg-blue-700 text-white rounded-xl cursor-pointer shadow-xs"
                 >
                   Lưu cấu hình
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* File Preview Modal */}
+      {previewFile && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95">
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+              <div className="flex items-center gap-3 overflow-hidden">
+                <div className="p-2 rounded-xl bg-blue-100 text-blue-600">
+                  {getFileIcon(previewFile.fileType)}
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm sm:text-base text-slate-900 truncate">
+                    {previewFile.fileName}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {formatFileSize(previewFile.fileSize)} • Định dạng .{previewFile.fileType}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {previewFile.storageUrl && (
+                  <a
+                    href={previewFile.storageUrl}
+                    download={previewFile.fileName}
+                    className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold text-xs flex items-center gap-1.5 transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Tải về</span>
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setPreviewFile(null)}
+                  className="w-8 h-8 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-700 font-bold flex items-center justify-center cursor-pointer transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Preview Body */}
+            <div className="flex-1 overflow-auto p-4 bg-slate-100/50 min-h-[300px]">
+              {previewFile.fileType === 'html' || previewFile.contentSnapshot ? (
+                <div className="space-y-3">
+                  <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+                    <div className="px-3 py-1.5 bg-slate-100 border-b border-slate-200 text-[11px] font-bold text-slate-600 flex items-center justify-between">
+                      <span>Hiển thị giao diện trang web trực tiếp:</span>
+                      <span className="text-[10px] text-slate-400">Sandbox Preview</span>
+                    </div>
+                    <iframe
+                      title="HTML Preview"
+                      srcDoc={previewFile.contentSnapshot || ''}
+                      className="w-full h-80 bg-white border-0"
+                      sandbox="allow-scripts"
+                    />
+                  </div>
+
+                  <details className="bg-white rounded-2xl border border-slate-200 p-3 text-xs">
+                    <summary className="font-bold text-slate-700 cursor-pointer select-none">
+                      Xem mã nguồn HTML chi tiết
+                    </summary>
+                    <pre className="mt-2 p-3 bg-slate-900 text-slate-100 rounded-xl font-mono text-[11px] overflow-x-auto max-h-48">
+                      {previewFile.contentSnapshot || 'Chưa trích xuất mã nguồn'}
+                    </pre>
+                  </details>
+                </div>
+              ) : ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(previewFile.fileType) ? (
+                <div className="flex items-center justify-center h-full min-h-[300px]">
+                  <img
+                    src={previewFile.storageUrl}
+                    alt={previewFile.fileName}
+                    className="max-h-[60vh] max-w-full rounded-2xl object-contain shadow-md"
+                  />
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-64 text-center space-y-3 text-slate-500">
+                  <FileText className="w-12 h-12 text-slate-400" />
+                  <p className="text-xs">
+                    Tệp tài liệu này đã được lưu trữ an toàn. Em có thể bấm "Tải về" để mở trên thiết bị.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Preview Footer */}
+            <div className="p-4 bg-white border-t border-slate-100 flex items-center justify-between gap-2">
+              <span className="text-xs text-slate-500">
+                Lưu trữ: <strong>{previewFile.isSupabase ? 'Supabase Storage' : 'Hệ thống'}</strong>
+              </span>
+
+              <div className="flex items-center gap-2">
+                {(previewFile.fileType === 'html' || previewFile.contentSnapshot) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onAnalyzeWith4C) {
+                        onAnalyzeWith4C(previewFile.contentSnapshot);
+                      }
+                      setPreviewFile(null);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-linear-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-xs cursor-pointer hover:from-amber-400 hover:to-amber-500"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Chẩn đoán AI 4C cho tệp này</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setPreviewFile(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
+                >
+                  Đóng
                 </button>
               </div>
             </div>

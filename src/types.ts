@@ -78,6 +78,8 @@ export interface SubmissionFile {
   storagePath: string;
   storageUrl: string;
   uploadedAt: string;
+  contentSnapshot?: string; // Content of text/HTML for instant AI 4C diagnosis
+  isSupabase?: boolean;
 }
 
 export interface ExternalLink {

@@ -182,6 +182,24 @@ INSERT INTO storage.buckets (id, name, public, file_size_limit)
 VALUES ('submission-files', 'submission-files', true, 26214400) -- 25MB
 ON CONFLICT (id) DO UPDATE SET public = true;
 
+-- Cấp quyền RLS cho storage.objects để học sinh nộp bài và tải tệp
+DROP POLICY IF EXISTS "policy_storage_objects_select" ON storage.objects;
+DROP POLICY IF EXISTS "policy_storage_objects_insert" ON storage.objects;
+DROP POLICY IF EXISTS "policy_storage_objects_update" ON storage.objects;
+DROP POLICY IF EXISTS "policy_storage_objects_delete" ON storage.objects;
+
+CREATE POLICY "policy_storage_objects_select" ON storage.objects
+  FOR SELECT USING (bucket_id = 'submission-files');
+
+CREATE POLICY "policy_storage_objects_insert" ON storage.objects
+  FOR INSERT WITH CHECK (bucket_id = 'submission-files');
+
+CREATE POLICY "policy_storage_objects_update" ON storage.objects
+  FOR UPDATE USING (bucket_id = 'submission-files');
+
+CREATE POLICY "policy_storage_objects_delete" ON storage.objects
+  FOR DELETE USING (bucket_id = 'submission-files');
+
 -- =========================================================================
 -- DỮ LIỆU BAN ĐẦU (SEED DATA MẪU)
 -- =========================================================================
