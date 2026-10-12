@@ -11,6 +11,8 @@ export interface User {
   school: string;
   bio?: string;
   joinedDate: string;
+  username?: string;
+  password?: string;
 }
 
 export interface ClassRoom {

@@ -31,8 +31,21 @@ import {
   INITIAL_SAFENET_CHALLENGES,
 } from '../data/safeNetData';
 import { aiService } from '../services/aiService';
+import { getSupabaseClient } from '../services/supabaseClient';
 
 interface AppContextType {
+  isAuthenticated: boolean;
+  loginWithCredentials: (
+    username: string,
+    password: string
+  ) => Promise<{ success: boolean; message: string; user?: User }>;
+  registerWithCredentials: (
+    username: string,
+    password: string,
+    role?: Role,
+    name?: string
+  ) => Promise<{ success: boolean; message: string; user?: User }>;
+  logoutUser: () => void;
   currentUser: User;
   users: User[];
   classes: ClassRoom[];
@@ -274,9 +287,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAuditLogs((prev) => [newLog, ...prev]);
   };
 
+  // Authentication state
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return localStorage.getItem('nd_is_authenticated') === 'true';
+  });
+
   // Auth & Role Switcher
   const loginUser = (user: User) => {
     setCurrentUser(user);
+    setIsAuthenticated(true);
+    localStorage.setItem('nd_is_authenticated', 'true');
+    localStorage.setItem('nd_current_user', JSON.stringify(user));
     logAction('LOGIN', user.name, `Đăng nhập vai trò ${user.role}`);
     if (user.role === 'TEACHER') {
       setActiveView('teacher_dashboard');
@@ -285,6 +306,177 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } else {
       setActiveView('student_dashboard');
     }
+  };
+
+  const loginWithCredentials = async (
+    username: string,
+    pass: string
+  ): Promise<{ success: boolean; message: string; user?: User }> => {
+    const cleanUsername = username.trim().toLowerCase();
+    const cleanPass = pass.trim();
+
+    if (!cleanUsername || !cleanPass) {
+      return { success: false, message: 'Vui lòng nhập đầy đủ tên tài khoản và mật khẩu.' };
+    }
+
+    // 1. Check local users
+    let matchedUser = users.find(
+      (u) =>
+        (u.username && u.username.toLowerCase() === cleanUsername) ||
+        (u.email && u.email.toLowerCase().startsWith(cleanUsername))
+    );
+
+    if (matchedUser) {
+      if (matchedUser.password && matchedUser.password !== cleanPass) {
+        return { success: false, message: 'Mật khẩu không chính xác. Vui lòng kiểm tra lại.' };
+      }
+    } else {
+      // 2. Query Supabase profiles if available
+      try {
+        const supabase = getSupabaseClient();
+        if (supabase) {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .or(`username.eq.${cleanUsername},email.ilike.${cleanUsername}%`)
+            .maybeSingle();
+
+          if (data && !error) {
+            matchedUser = {
+              id: data.id,
+              name: data.name,
+              email: data.email,
+              username: data.username || cleanUsername,
+              password: cleanPass,
+              role: (data.role as Role) || 'STUDENT',
+              avatar:
+                data.avatar ||
+                'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+              school: data.school || 'Trường THPT Nguyễn Dục',
+              className: data.class_name || '12A1',
+              classId: data.class_id || 'class_12a1',
+              bio: data.bio || '',
+              joinedDate: new Date().toISOString().slice(0, 10),
+            };
+            setUsers((prev) => [matchedUser!, ...prev]);
+          }
+        }
+      } catch (err) {
+        console.warn('Supabase profile query fallback error:', err);
+      }
+    }
+
+    if (!matchedUser) {
+      return {
+        success: false,
+        message: 'Tài khoản không tồn tại. Vui lòng chuyển sang tab Đăng ký để tạo tài khoản mới.',
+      };
+    }
+
+    loginUser(matchedUser);
+    return {
+      success: true,
+      message: `Đăng nhập thành công! Chào mừng ${matchedUser.name}.`,
+      user: matchedUser,
+    };
+  };
+
+  const registerWithCredentials = async (
+    username: string,
+    pass: string,
+    role: Role = 'STUDENT',
+    name?: string
+  ): Promise<{ success: boolean; message: string; user?: User }> => {
+    const cleanUsername = username.trim().toLowerCase();
+    const cleanPass = pass.trim();
+
+    if (!cleanUsername || !cleanPass) {
+      return { success: false, message: 'Vui lòng nhập đầy đủ tên tài khoản và mật khẩu.' };
+    }
+
+    if (cleanPass.length < 3) {
+      return { success: false, message: 'Mật khẩu phải có tối thiểu 3 ký tự.' };
+    }
+
+    const existing = users.find(
+      (u) => u.username && u.username.toLowerCase() === cleanUsername
+    );
+    if (existing) {
+      return {
+        success: false,
+        message: 'Tên tài khoản này đã được sử dụng. Vui lòng chọn tên khác hoặc chuyển sang Đăng nhập.',
+      };
+    }
+
+    const displayName =
+      name?.trim() ||
+      (role === 'TEACHER'
+        ? `Thầy/Cô ${username.trim()}`
+        : role === 'ADMIN'
+        ? `Quản trị ${username.trim()}`
+        : `Học sinh ${username.trim()}`);
+
+    const defaultAvatar =
+      role === 'TEACHER'
+        ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80'
+        : role === 'ADMIN'
+        ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80'
+        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80';
+
+    const newUser: User = {
+      id: `user_${Date.now()}`,
+      name: displayName,
+      username: cleanUsername,
+      password: cleanPass,
+      email: `${cleanUsername}@thptnguyenduc.edu.vn`,
+      role,
+      avatar: defaultAvatar,
+      className: role === 'STUDENT' ? '12A1' : undefined,
+      classId: role === 'STUDENT' ? 'class_12a1' : undefined,
+      school: 'Trường THPT Nguyễn Dục',
+      bio: role === 'TEACHER' ? 'Giáo viên Tin học' : 'Học sinh THPT Nguyễn Dục',
+      joinedDate: new Date().toISOString().slice(0, 10),
+    };
+
+    setUsers((prev) => [newUser, ...prev]);
+    loginUser(newUser);
+
+    // Asynchronously try to sync to Supabase profiles
+    try {
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        await supabase.from('profiles').insert([
+          {
+            id: newUser.id,
+            username: newUser.username,
+            name: newUser.name,
+            email: newUser.email,
+            role: newUser.role,
+            class_name: newUser.className,
+            class_id: newUser.classId,
+            school: newUser.school,
+            bio: newUser.bio,
+          },
+        ]);
+      }
+    } catch (err) {
+      console.warn('Could not sync user to Supabase:', err);
+    }
+
+    logAction('REGISTER', newUser.name, `Đăng ký tài khoản mới ${cleanUsername} (${role})`);
+
+    return {
+      success: true,
+      message: `Đăng ký tài khoản thành công! Chào mừng ${newUser.name}.`,
+      user: newUser,
+    };
+  };
+
+  const logoutUser = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('nd_is_authenticated');
+    logAction('LOGOUT', currentUser.name, 'Đăng xuất khỏi hệ thống');
+    setActiveView('landing');
   };
 
   const switchRole = (role: Role) => {
@@ -883,6 +1075,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   return (
     <AppContext.Provider
       value={{
+        isAuthenticated,
+        loginWithCredentials,
+        registerWithCredentials,
+        logoutUser,
         currentUser,
         users,
         classes,

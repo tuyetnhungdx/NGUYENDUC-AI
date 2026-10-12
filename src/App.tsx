@@ -17,9 +17,14 @@ import { ProgressAnalytics } from './components/ProgressAnalytics';
 import { ResponsibleAI } from './components/ResponsibleAI';
 import { AdminDashboard } from './components/AdminDashboard';
 import { SafeNetHub } from './components/safenet/SafeNetHub';
+import { AuthScreen } from './components/AuthScreen';
 
 const AppContent: React.FC = () => {
-  const { activeView } = useApp();
+  const { activeView, isAuthenticated } = useApp();
+
+  if (!isAuthenticated) {
+    return <AuthScreen />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">

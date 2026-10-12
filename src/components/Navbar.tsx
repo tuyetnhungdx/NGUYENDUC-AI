@@ -22,6 +22,7 @@ export const Navbar: React.FC = () => {
     currentUser,
     users,
     loginUser,
+    logoutUser,
     activeView,
     setActiveView,
     serverHealth,
@@ -351,22 +352,22 @@ export const Navbar: React.FC = () => {
                   <div className="pt-2 mt-2 border-t border-slate-100 flex items-center justify-between px-2">
                     <button
                       onClick={() => {
-                        setActiveView('landing');
+                        logoutUser();
                         setShowRoleDropdown(false);
                       }}
-                      className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1"
+                      className="text-xs text-red-600 hover:text-red-700 font-semibold flex items-center gap-1 cursor-pointer"
                     >
                       <LogOut className="w-3.5 h-3.5" />
-                      Về trang chủ
+                      Đăng xuất
                     </button>
                     <button
                       onClick={() => {
-                        setActiveView('responsible_ai');
+                        setActiveView('landing');
                         setShowRoleDropdown(false);
                       }}
-                      className="text-xs text-[#2563EB] font-semibold hover:underline"
+                      className="text-xs text-slate-500 hover:text-slate-800"
                     >
-                      AI An toàn & Trách nhiệm →
+                      Trang chủ
                     </button>
                   </div>
                 </div>

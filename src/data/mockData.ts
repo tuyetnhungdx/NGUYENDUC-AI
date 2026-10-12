@@ -4,6 +4,8 @@ export const INITIAL_USERS: User[] = [
   {
     id: 'user_teacher_1',
     name: 'Cô Trần Thị Tuyết Nhung',
+    username: 'nhung.ttt',
+    password: '123',
     email: 'nhung.ttt@thptnguyenduc.edu.vn',
     role: 'TEACHER',
     avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
@@ -14,6 +16,8 @@ export const INITIAL_USERS: User[] = [
   {
     id: 'user_student_1',
     name: 'Trần Thị Mai Anh',
+    username: 'maianh',
+    password: '123',
     email: 'maianh.hs1201@thptnguyenduc.edu.vn',
     role: 'STUDENT',
     avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
@@ -26,6 +30,8 @@ export const INITIAL_USERS: User[] = [
   {
     id: 'user_student_2',
     name: 'Lê Hoàng Nam',
+    username: 'hoangnam',
+    password: '123',
     email: 'nam.hs1202@thptnguyenduc.edu.vn',
     role: 'STUDENT',
     avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
@@ -38,6 +44,8 @@ export const INITIAL_USERS: User[] = [
   {
     id: 'user_student_3',
     name: 'Phạm Thảo Vy',
+    username: 'thaovy',
+    password: '123',
     email: 'vy.hs1203@thptnguyenduc.edu.vn',
     role: 'STUDENT',
     avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
@@ -50,6 +58,8 @@ export const INITIAL_USERS: User[] = [
   {
     id: 'user_admin_1',
     name: 'Quản trị viên Hệ thống (BGH)',
+    username: 'admin',
+    password: '123',
     email: 'quantri@thptnguyenduc.edu.vn',
     role: 'ADMIN',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',

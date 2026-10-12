@@ -35,6 +35,7 @@ import {
   isSupabaseConfigured,
   getSupabaseConfig,
   setCustomSupabaseConfig,
+  testSupabaseConnection,
 } from '../services/supabaseClient';
 
 interface StudentUploadAreaProps {
@@ -98,6 +99,11 @@ export const StudentUploadArea: React.FC<StudentUploadAreaProps> = ({
   const [supabaseUrlInput, setSupabaseUrlInput] = useState('');
   const [supabaseKeyInput, setSupabaseKeyInput] = useState('');
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(isSupabaseConfigured());
+  const [isTestingSupabase, setIsTestingSupabase] = useState(false);
+  const [supabaseTestFeedback, setSupabaseTestFeedback] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
 
   // Populate from existing submission when assignment changes
   useEffect(() => {
@@ -281,8 +287,37 @@ export const StudentUploadArea: React.FC<StudentUploadAreaProps> = ({
   const handleSaveSupabaseConfig = () => {
     setCustomSupabaseConfig(supabaseUrlInput.trim(), supabaseKeyInput.trim());
     setIsSupabaseConnected(isSupabaseConfigured());
-    setShowSupabaseModal(false);
-    alert('Đã cập nhật cấu hình Supabase thành công!');
+    setSupabaseTestFeedback({
+      success: true,
+      message: '✓ Đã lưu cấu hình Supabase vào bộ nhớ ứng dụng thành công!',
+    });
+    setTimeout(() => {
+      setShowSupabaseModal(false);
+      setSupabaseTestFeedback(null);
+    }, 1500);
+  };
+
+  // Test live connection to Supabase
+  const handleTestSupabaseConfig = async () => {
+    // Temporarily save inputs to test them
+    setCustomSupabaseConfig(supabaseUrlInput.trim(), supabaseKeyInput.trim());
+    setIsTestingSupabase(true);
+    setSupabaseTestFeedback(null);
+    try {
+      const result = await testSupabaseConnection();
+      setIsSupabaseConnected(result.success);
+      setSupabaseTestFeedback({
+        success: result.success,
+        message: result.message,
+      });
+    } catch (err: any) {
+      setSupabaseTestFeedback({
+        success: false,
+        message: `Lỗi kết nối: ${err.message || 'Không thể kiểm tra'}`,
+      });
+    } finally {
+      setIsTestingSupabase(false);
+    }
   };
 
   // File Icon helper
@@ -865,25 +900,59 @@ export const StudentUploadArea: React.FC<StudentUploadAreaProps> = ({
                 />
               </div>
 
+              {supabaseTestFeedback && (
+                <div
+                  className={`p-3 rounded-xl text-xs flex items-start gap-2 ${
+                    supabaseTestFeedback.success
+                      ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                      : 'bg-amber-50 border border-amber-200 text-amber-800'
+                  }`}
+                >
+                  {supabaseTestFeedback.success ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  )}
+                  <span>{supabaseTestFeedback.message}</span>
+                </div>
+              )}
+
               <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-[11px] text-blue-900">
                 <strong>Ghi chú:</strong> Tệp khởi tạo bảng SQL, cấu hình RLS và Bucket đã được xuất tại{' '}
                 <code>/supabase/schema.sql</code>. Em hoặc thầy cô có thể copy và chạy trong Supabase SQL Editor.
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-2 border-t border-slate-100">
               <button
-                onClick={() => setShowSupabaseModal(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                type="button"
+                onClick={handleTestSupabaseConfig}
+                disabled={isTestingSupabase}
+                className="w-full sm:w-auto px-4 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl cursor-pointer flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
               >
-                Đóng
+                <RefreshCw className={`w-3.5 h-3.5 ${isTestingSupabase ? 'animate-spin' : ''}`} />
+                {isTestingSupabase ? 'Đang kiểm tra kết nối...' : 'Kiểm tra kết nối'}
               </button>
-              <button
-                onClick={handleSaveSupabaseConfig}
-                className="px-5 py-2 text-xs font-bold bg-[#2563EB] hover:bg-blue-700 text-white rounded-xl cursor-pointer"
-              >
-                Lưu cấu hình
-              </button>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSupabaseModal(false);
+                    setSupabaseTestFeedback(null);
+                  }}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveSupabaseConfig}
+                  className="px-5 py-2 text-xs font-bold bg-[#2563EB] hover:bg-blue-700 text-white rounded-xl cursor-pointer shadow-xs"
+                >
+                  Lưu cấu hình
+                </button>
+              </div>
             </div>
           </div>
         </div>

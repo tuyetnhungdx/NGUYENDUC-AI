@@ -1,9 +1,11 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { SubmissionFile } from '../types';
 
-// Read configuration from environment or localStorage override
-const envSupabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const envSupabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+// Read configuration from environment or localStorage override (fallback to configured project)
+const envSupabaseUrl =
+  import.meta.env.VITE_SUPABASE_URL || 'https://kmeqpnzogxtlrewwmxyv.supabase.co';
+const envSupabaseKey =
+  import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_f6gTX7LwaCq4R5OiAQdhEA_JbimhjdQ';
 
 let cachedClient: SupabaseClient | null = null;
 
@@ -45,6 +47,50 @@ export const setCustomSupabaseConfig = (url: string, key: string) => {
   else localStorage.removeItem('nd_supabase_key');
 
   cachedClient = null;
+};
+
+/**
+ * Test real live connectivity to Supabase and check for submission-files bucket
+ */
+export const testSupabaseConnection = async (): Promise<{
+  success: boolean;
+  message: string;
+  hasBucket: boolean;
+}> => {
+  const client = getSupabaseClient();
+  if (!client) {
+    return {
+      success: false,
+      message: 'Chưa cấu hình URL hoặc Anon Key của Supabase.',
+      hasBucket: false,
+    };
+  }
+
+  try {
+    const { data: buckets, error } = await client.storage.listBuckets();
+    if (error) {
+      return {
+        success: false,
+        message: `Lỗi phản hồi từ Supabase: ${error.message}`,
+        hasBucket: false,
+      };
+    }
+
+    const hasBucket = Boolean(buckets?.some((b) => b.name === 'submission-files'));
+    return {
+      success: true,
+      message: hasBucket
+        ? 'Kết nối Supabase thành công! Storage bucket "submission-files" đã sẵn sàng.'
+        : 'Kết nối Supabase thành công! (Lưu ý: Bạn hãy tạo bucket "submission-files" trong mục Storage của Supabase để tải tệp).',
+      hasBucket,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: `Không thể kết nối đến máy chủ Supabase: ${err.message || 'Lỗi mạng'}`,
+      hasBucket: false,
+    };
+  }
 };
 
 /**
