@@ -1,0 +1,6 @@
+{
+  "name": "Nguyễn Dục AI Learning Hub",
+  "description": "Nền tảng lớp học số thông minh tích hợp AI hỗ trợ học sinh THPT học tập, nộp bài và cải thiện theo mô hình AI 4C.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
