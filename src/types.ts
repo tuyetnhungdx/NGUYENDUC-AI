@@ -68,6 +68,9 @@ export interface Assignment {
   isDemo?: boolean;
   maxFileSizeMb?: number; // e.g. 20
   allowedExtensions?: string[]; // e.g. ['pdf', 'docx', 'pptx', 'xlsx', 'jpg', 'png', 'html', 'css', 'js', 'py', 'zip']
+  targetClassIds?: string[]; // Multiple class targets or ['all']
+  externalLinks?: ExternalLink[]; // Link bài tập / tài liệu đính kèm (Google Drive, Canva, Docs...)
+  questionPrompt?: string; // Câu hỏi chủ đề liên quan
 }
 
 export interface SubmissionFile {
@@ -182,6 +185,8 @@ export interface DiscussionPost {
   comments: DiscussionComment[];
   isPinned?: boolean;
   isSolved?: boolean;
+  attachedLink?: string; // Link bài tập / tài liệu
+  assignmentId?: string; // Mã bài tập liên kết nếu có
 }
 
 export interface NotificationItem {
@@ -193,6 +198,8 @@ export interface NotificationItem {
   read: boolean;
   type: 'assignment' | 'feedback' | 'forum' | 'system';
   linkTarget?: string;
+  targetView?: string;
+  targetId?: string;
 }
 
 export interface AuditLog {
